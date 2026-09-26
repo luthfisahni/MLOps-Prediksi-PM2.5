@@ -37,9 +37,13 @@ MLOps-Prediksi-PM2.5/
 │   └── devcontainer.json
 ├── config/
 ├── data/
+│   ├── raw/
+│   └── processed/
 ├── models/
 ├── notebooks/
 ├── src/
+│   ├── ingest_data.py
+│   └── preprocess.py
 ├── .gitignore
 ├── LICENSE
 ├── README.md
@@ -87,4 +91,79 @@ Dependency utama:
 
 ```bash
 python -m pip install -r requirements.txt
+```
 
+## Data Ingestion dan Preprocessing
+
+### Sumber Data
+
+Data kualitas udara diperoleh secara dinamis dari OpenAQ API dengan konfigurasi:
+
+* Lokasi: STT Satyabhakti
+* Location ID: `6144741`
+* Sensor ID: `14739443`
+* Parameter: PM2.5
+* Interval pengukuran: 1 jam
+* Satuan: µg/m³
+
+### Data Ingestion
+
+Proses pengambilan data diimplementasikan pada:
+
+```text
+src/ingest_data.py
+```
+
+API key disimpan menggunakan environment variable `OPENAQ_API_KEY` agar tidak ditulis langsung di dalam source code.
+
+Set environment variable:
+
+```bash
+export OPENAQ_API_KEY="API_KEY_ANDA"
+```
+
+Kemudian jalankan:
+
+```bash
+python src/ingest_data.py
+```
+
+Data mentah disimpan pada:
+
+```text
+data/raw/pm25_stt_satyabhakti.csv
+```
+
+Script dapat dijalankan berulang kali untuk melakukan simulasi pengambilan data secara berkala. Data yang sudah tersimpan tidak akan dimasukkan kembali sehingga duplikasi berdasarkan waktu pengukuran dapat dihindari.
+
+### Preprocessing
+
+Proses preprocessing diimplementasikan pada:
+
+```text
+src/preprocess.py
+```
+
+Jalankan dengan:
+
+```bash
+python src/preprocess.py
+```
+
+Tahapan preprocessing meliputi:
+
+1. Mengubah waktu pengukuran menjadi format `datetime`.
+2. Mengubah nilai PM2.5 menjadi tipe numerik.
+3. Menghapus data duplikat berdasarkan waktu pengukuran.
+4. Menangani missing value pada waktu dan nilai PM2.5.
+5. Menghapus nilai PM2.5 yang tidak valid.
+6. Mengurutkan data berdasarkan waktu.
+7. Memilih kolom `datetime` dan `value` untuk tahap feature engineering.
+
+Hasil preprocessing disimpan pada:
+
+```text
+data/processed/pm25_stt_satyabhakti_clean.csv
+```
+
+Dataset hasil preprocessing selanjutnya digunakan sebagai input untuk tahap feature engineering dan pengembangan model.
