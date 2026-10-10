@@ -1,0 +1,5 @@
+outs:
+- md5: 174146b294ea2ec06fc9a9c2272b7c3c
+  size: 57783
+  hash: md5
+  path: pm25_stt_satyabhakti.csv
