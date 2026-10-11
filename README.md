@@ -167,3 +167,88 @@ data/processed/pm25_stt_satyabhakti_clean.csv
 ```
 
 Dataset hasil preprocessing selanjutnya digunakan sebagai input untuk tahap feature engineering dan pengembangan model.
+
+## Data Versioning dengan DVC
+
+### Tujuan
+
+Data Version Control (DVC) digunakan untuk mengelola versi dataset PM2.5 yang diperoleh melalui proses data ingestion. Dengan DVC, perubahan dataset dapat dilacak sehingga versi data sebelum dan sesudah pembaruan dapat dibandingkan.
+
+Git digunakan untuk menyimpan konfigurasi DVC dan file pointer `.dvc`, sedangkan DVC mengelola isi dataset melalui cache lokal.
+
+### Inisialisasi DVC
+
+DVC diinstal dan diinisialisasi pada repository menggunakan perintah:
+
+```bash
+python -m pip install dvc
+dvc init
+```
+
+Inisialisasi menghasilkan konfigurasi pada direktori `.dvc/` dan file `.dvcignore`. Konfigurasi tersebut disimpan dalam Git agar dapat digunakan bersama oleh pengembang proyek.
+
+### Pelacakan Dataset
+
+Dataset mentah dari proses ingestion LK-04 dilacak menggunakan perintah:
+
+```bash
+dvc add data/raw/pm25_stt_satyabhakti.csv
+```
+
+Perintah tersebut menghasilkan file pointer:
+
+```text
+data/raw/pm25_stt_satyabhakti.csv.dvc
+```
+
+DVC juga membuat aturan pada `data/raw/.gitignore` agar file CSV tidak dilacak langsung oleh Git. File pointer `.dvc` tetap disimpan dalam Git untuk mencatat metadata dataset.
+
+### Simulasi Pembaruan Dataset
+
+Pembaruan dataset disimulasikan dengan menjalankan kembali proses ingestion untuk mengambil data terbaru dari OpenAQ API.
+
+```bash
+python src/ingest_data.py
+dvc add data/raw/pm25_stt_satyabhakti.csv
+```
+
+Pada pengujian ini, proses ingestion menerima 719 observasi dari API, menemukan 704 baris data lama, dan melaporkan 344 data baru. Setelah penggabungan data dan penghapusan duplikasi, dataset berisi 1.048 baris data atau 1.049 baris termasuk header CSV.
+
+Setelah dataset diperbarui, perintah `dvc add` dijalankan kembali untuk memperbarui metadata pada file pointer `.dvc`.
+
+### Audit dan Perbandingan Versi Dataset
+
+Perubahan metadata dataset dapat diperiksa menggunakan perintah Git:
+
+```bash
+git diff -- data/raw/pm25_stt_satyabhakti.csv.dvc
+```
+
+Hasil perbandingan metadata dataset pada pengujian LK-05 adalah sebagai berikut:
+
+| Metadata | Versi Awal | Versi Setelah Ingestion |
+|---|---|---|
+| MD5 | `174146b294ea2ec06fc9a9c2272b7c3c` | `b823abf04658e25325fd4054c9bba117` |
+| Ukuran | 57.783 byte | 85.995 byte |
+
+Perubahan hash dan ukuran menunjukkan bahwa isi dataset telah berubah setelah proses ingestion ulang.
+
+Perbandingan ant versi dataset yang tersimpan pada commit Git dilakukan menggunakan:
+
+```bash
+dvc diff HEAD~1 HEAD
+```
+
+Hasil pengujian menunjukkan bahwa `data/raw/pm25_stt_satyabhakti.csv` terdeteksi sebagai dataset yang dimodifikasi.
+
+Status dataset saat ini dapat diperiksa menggunakan:
+
+```bash
+dvc status
+```
+
+Apabila dataset sesuai dengan metadata DVC terbaru, perintah tersebut menampilkan status `Data and pipelines are up to date.`
+
+### Penyimpanan dan Reproduksibilitas
+
+DVC menyimpan dataset dalam cache lokal, sedangkan Git menyimpan file pointer `.dvc` yang mencatat metadata dataset. Kombinasi keduanya memungkinkan perubahan dataset dilacak dan versi yang berbeda dibandingkan.
