@@ -1,0 +1,36 @@
+artifact_path: /workspaces/MLOps-Prediksi-PM2.5/mlruns/1/models/m-a373b6d4fa5a4e8c95cee18936e577e3/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.12.14
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.16.0
+model_id: m-a373b6d4fa5a4e8c95cee18936e577e3
+model_size_bytes: 1006839
+model_uuid: m-a373b6d4fa5a4e8c95cee18936e577e3
+prompts: null
+run_id: 25c5a2a53a2d4418b3de91dfc9fd4072
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "lag_1", "required": true}, {"type": "double",
+    "name": "lag_2", "required": true}, {"type": "double", "name": "lag_3", "required":
+    true}]'
+  outputs: '[{"type": "double", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-10-19 11:50:01.968913'
