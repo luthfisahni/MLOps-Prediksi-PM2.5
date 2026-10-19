@@ -12,8 +12,6 @@ from sklearn.metrics import (
     r2_score,
 )
 
-
-# Konfigurasi dataset dan eksperimen
 DATA_FILE = Path("data/processed/pm25_stt_satyabhakti_clean.csv")
 EXPERIMENT_NAME = "Prediksi PM2.5 - Random Forest"
 
@@ -29,7 +27,6 @@ EXPERIMENTS = [
 
 
 def load_data():
-    """Memuat dataset dan membuat fitur untuk prediksi periode berikutnya."""
     if not DATA_FILE.exists():
         raise FileNotFoundError(
             f"Dataset tidak ditemukan: {DATA_FILE}"
@@ -61,7 +58,7 @@ def load_data():
     for lag in LAG_PERIODS:
         df[f"lag_{lag}"] = df["value"].shift(lag)
 
-    # Target adalah nilai PM2.5 pada baris/periode berikutnya.
+    # Target nilai PM2.5 pada baris/periode berikutnya.
     df["target"] = df["value"].shift(-1)
 
     # Baris tanpa fitur lag atau target dihapus.
@@ -79,8 +76,6 @@ def main():
     X = df[feature_columns]
     y = df["target"]
 
-    # Pembagian kronologis: data lama untuk training,
-    # data terbaru untuk testing.
     split_index = int(len(df) * (1 - TEST_RATIO))
 
     if split_index <= 0 or split_index >= len(df):
@@ -93,7 +88,6 @@ def main():
     y_train = y.iloc[:split_index]
     y_test = y.iloc[split_index:]
 
-    # Seluruh eksperimen menggunakan dataset dan split yang sama.
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     print("=== Pelatihan Model Prediksi PM2.5 ===")
@@ -128,7 +122,6 @@ def main():
             mae = mean_absolute_error(y_test, predictions)
             r2 = r2_score(y_test, predictions)
 
-            # Catat parameter eksperimen.
             mlflow.log_param(
                 "model_type", "RandomForestRegressor"
             )
@@ -146,12 +139,10 @@ def main():
             )
             mlflow.log_param("target", "next_period_pm25")
 
-            # Catat metrik evaluasi.
             mlflow.log_metric("rmse", rmse)
             mlflow.log_metric("mae", mae)
             mlflow.log_metric("r2", r2)
 
-            # Simpan model sebagai artefak run di MLflow.
             mlflow.sklearn.log_model(
                 sk_model=model,
                 name="random_forest_model",
@@ -176,7 +167,6 @@ def main():
             print(f"R²        : {r2:.4f}")
             print("-" * 40)
 
-    # RMSE terkecil menjadi kriteria pemilihan model terbaik.
     best_result = min(results, key=lambda result: result["rmse"])
 
     print("\n=== Model Terbaik Berdasarkan RMSE ===")
