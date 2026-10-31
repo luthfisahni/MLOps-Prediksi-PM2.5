@@ -252,3 +252,46 @@ Apabila dataset sesuai dengan metadata DVC terbaru, perintah tersebut menampilka
 ### Penyimpanan dan Reproduksibilitas
 
 DVC menyimpan dataset dalam cache lokal, sedangkan Git menyimpan file pointer `.dvc` yang mencatat metadata dataset. Kombinasi keduanya memungkinkan perubahan dataset dilacak dan versi yang berbeda dibandingkan.
+
+## Model Registry dan Production Model
+
+Model prediksi PM2.5 dikelola menggunakan MLflow Model Registry dengan nama `PM25_RandomForest_Best`. Model memiliki dua versi yang didaftarkan melalui proses eksperimen dan pelatihan ulang.
+
+### Perbandingan Versi Model
+
+| Metrik | Version 1 | Version 2 |
+|---|---:|---:|
+| RMSE | 16.32635 | 16.29214 |
+| MAE | 10.72509 | 10.69425 |
+| R² | 0.15805 | 0.16158 |
+
+Version 1 menggunakan konfigurasi `n_estimators=50` dan `max_depth=5`, sedangkan Version 2 menggunakan `n_estimators=100` dan `max_depth=5`.
+
+Version 2 dipilih sebagai model Production karena menghasilkan nilai RMSE dan MAE yang lebih rendah serta R² yang lebih tinggi dibandingkan Version 1.
+
+### Model Aktif untuk Inference
+
+| Informasi | Nilai |
+|---|---|
+| Nama model | `PM25_RandomForest_Best` |
+| Versi aktif | Version 2 |
+| Stage | Production |
+| Alias | `production` |
+| Run ID | `b6877040c9214168a3a66421bfba453f` |
+| Hyperparameter | `n_estimators=100`, `max_depth=5` |
+
+Model aktif dimuat melalui MLflow PyFunc menggunakan URI:
+
+`models:/PM25_RandomForest_Best@production`
+
+Proses inference dilakukan melalui `src/inference.py` dengan tiga fitur masukan, yaitu `lag_1`, `lag_2`, dan `lag_3`. Fitur tersebut diambil dari tiga observasi PM2.5 terakhir pada dataset hasil preprocessing.
+
+### Versioning Metadata dengan DVC
+
+DVC digunakan untuk melacak dataset dan metadata model yang dipilih. File yang dikelola meliputi:
+
+- `data/raw/pm25_stt_satyabhakti.csv`
+- `data/processed/pm25_stt_satyabhakti_clean.csv`
+- `models/production_model.yaml`
+
+Metadata model mencatat versi model, konfigurasi hyperparameter, hasil evaluasi, Run ID, serta referensi hash dataset yang digunakan dalam proses pelatihan.
