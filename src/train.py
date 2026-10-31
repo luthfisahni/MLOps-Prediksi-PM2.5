@@ -1,19 +1,22 @@
 
 from pathlib import Path
+import argparse
 
 import mlflow
 import mlflow.sklearn
 import pandas as pd
 
+from mlflow import MlflowClient
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import (
-    mean_absolute_error,
-    mean_squared_error,
-    r2_score,
-)
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-DATA_FILE = Path("data/processed/pm25_stt_satyabhakti_clean.csv")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATABASE_PATH = ROOT_DIR / "mlflow.db"
+DATA_PATH = ROOT_DIR / "data/processed/pm25_stt_satyabhakti_clean.csv"
+
 EXPERIMENT_NAME = "Prediksi PM2.5 - Random Forest"
+MODEL_NAME = "PM25_RandomForest_Best"
+MODEL_ARTIFACT = "random_forest_model"
 
 LAG_PERIODS = [1, 2, 3]
 TEST_RATIO = 0.2
@@ -25,158 +28,141 @@ EXPERIMENTS = [
     {"n_estimators": 200, "max_depth": None},
 ]
 
+VERSION_2_PARAMS = {
+    "n_estimators": 100,
+    "max_depth": 5,
+}
 
-def load_data():
-    if not DATA_FILE.exists():
-        raise FileNotFoundError(
-            f"Dataset tidak ditemukan: {DATA_FILE}"
-        )
+def prepare_data():
+    df = pd.read_csv(DATA_PATH)
 
-    df = pd.read_csv(DATA_FILE)
-
-    required_columns = {"datetime", "value"}
-    if not required_columns.issubset(df.columns):
-        raise ValueError(
-            f"Dataset harus memiliki kolom: {required_columns}"
-        )
-
-    df["datetime"] = pd.to_datetime(
-        df["datetime"], errors="coerce"
-    )
-    df["value"] = pd.to_numeric(
-        df["value"], errors="coerce"
-    )
-
-    df = (
-        df.dropna(subset=["datetime", "value"])
-        .sort_values("datetime")
-        .drop_duplicates(subset=["datetime"])
-        .reset_index(drop=True)
-    )
-
-    # Fitur dari nilai PM2.5 pada periode sebelumnya.
     for lag in LAG_PERIODS:
         df[f"lag_{lag}"] = df["value"].shift(lag)
 
-    # Target nilai PM2.5 pada baris/periode berikutnya.
     df["target"] = df["value"].shift(-1)
+    df = df.dropna().reset_index(drop=True)
 
-    # Baris tanpa fitur lag atau target dihapus.
-    feature_columns = [f"lag_{lag}" for lag in LAG_PERIODS]
-    df = df.dropna(
-        subset=feature_columns + ["target"]
-    ).reset_index(drop=True)
+    features = [f"lag_{lag}" for lag in LAG_PERIODS]
 
-    return df, feature_columns
-
-
-def main():
-    df, feature_columns = load_data()
-
-    X = df[feature_columns]
+    X = df[features]
     y = df["target"]
 
     split_index = int(len(df) * (1 - TEST_RATIO))
-
-    if split_index <= 0 or split_index >= len(df):
-        raise ValueError(
-            "Jumlah data tidak cukup untuk train/test split."
-        )
 
     X_train = X.iloc[:split_index]
     X_test = X.iloc[split_index:]
     y_train = y.iloc[:split_index]
     y_test = y.iloc[split_index:]
 
-    mlflow.set_experiment(EXPERIMENT_NAME)
-
-    print("=== Pelatihan Model Prediksi PM2.5 ===")
-    print(f"Dataset       : {DATA_FILE}")
-    print(f"Jumlah sampel : {len(df)}")
+    print(f"Jumlah data: {len(df)}")
     print(f"Data training: {len(X_train)}")
-    print(f"Data testing : {len(X_test)}")
-    print(f"Fitur        : {feature_columns}\n")
+    print(f"Data testing: {len(X_test)}")
 
-    results = []
+    return X_train, X_test, y_train, y_test
 
-    for config in EXPERIMENTS:
-        run_name = (
-            f"RF_estimators_{config['n_estimators']}"
-            f"_depth_{config['max_depth']}"
+def train_model(params, run_name, register=False):
+    X_train, X_test, y_train, y_test = prepare_data()
+
+    model = RandomForestRegressor(
+        **params,
+        random_state=RANDOM_STATE,
+        n_jobs=-1
+    )
+
+    with mlflow.start_run(run_name=run_name) as run:
+        model.fit(X_train, y_train)
+
+        predictions = model.predict(X_test)
+
+        rmse = mean_squared_error(y_test, predictions) ** 0.5
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
+
+        mlflow.log_params({
+            **params,
+            "random_state": RANDOM_STATE,
+            "test_ratio": TEST_RATIO,
+            "lag_periods": str(LAG_PERIODS)
+        })
+
+        mlflow.log_metrics({
+            "rmse": rmse,
+            "mae": mae,
+            "r2": r2
+        })
+
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            name=MODEL_ARTIFACT,
+            input_example=X_train.head(3)
         )
 
-        with mlflow.start_run(run_name=run_name):
-            model = RandomForestRegressor(
-                n_estimators=config["n_estimators"],
-                max_depth=config["max_depth"],
-                random_state=RANDOM_STATE,
-                n_jobs=-1,
+        run_id = run.info.run_id
+
+    print("\nHasil Training")
+    print("Run ID:", run_id)
+    print("Parameter:", params)
+    print(f"RMSE: {rmse:.5f}")
+    print(f"MAE : {mae:.5f}")
+    print(f"R2  : {r2:.5f}")
+
+    if register:
+        model_uri = f"runs:/{run_id}/{MODEL_ARTIFACT}"
+
+        registered_model = mlflow.register_model(
+            model_uri=model_uri,
+            name=MODEL_NAME
+        )
+
+        print("\nModel berhasil didaftarkan!")
+        print("Nama Model:", MODEL_NAME)
+        print("Version:", registered_model.version)
+        print("Run ID:", run_id)
+
+    return {
+        "run_id": run_id,
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2
+    }
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--register-v2",
+        action="store_true",
+        help="Menjalankan konfigurasi LK-07 dan mendaftarkannya sebagai versi baru"
+    )
+    args = parser.parse_args()
+
+    mlflow.set_tracking_uri(f"sqlite:///{DATABASE_PATH}")
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+    if args.register_v2:
+        print("Menjalankan eksperimen LK-07: Version 2")
+
+        train_model(
+            params=VERSION_2_PARAMS,
+            run_name="RF_estimators_100_depth_5_v2",
+            register=True
+        )
+
+    else:
+        print("Menjalankan seluruh eksperimen LK-06")
+
+        results = []
+
+        for i, params in enumerate(EXPERIMENTS, start=1):
+            result = train_model(
+                params=params,
+                run_name=f"RF_Experiment_{i}"
             )
+            results.append({**params, **result})
 
-            model.fit(X_train, y_train)
-            predictions = model.predict(X_test)
+        best = min(results, key=lambda item: item["rmse"])
 
-            rmse = mean_squared_error(
-                y_test, predictions
-            ) ** 0.5
-            mae = mean_absolute_error(y_test, predictions)
-            r2 = r2_score(y_test, predictions)
-
-            mlflow.log_param(
-                "model_type", "RandomForestRegressor"
-            )
-            mlflow.log_param(
-                "n_estimators", config["n_estimators"]
-            )
-            mlflow.log_param(
-                "max_depth", config["max_depth"]
-            )
-            mlflow.log_param("random_state", RANDOM_STATE)
-            mlflow.log_param("lag_periods", str(LAG_PERIODS))
-            mlflow.log_param("test_ratio", TEST_RATIO)
-            mlflow.log_param(
-                "feature_columns", str(feature_columns)
-            )
-            mlflow.log_param("target", "next_period_pm25")
-
-            mlflow.log_metric("rmse", rmse)
-            mlflow.log_metric("mae", mae)
-            mlflow.log_metric("r2", r2)
-
-            mlflow.sklearn.log_model(
-                sk_model=model,
-                name="random_forest_model",
-                input_example=X_train.head(3),
-            )
-
-            run_id = mlflow.active_run().info.run_id
-
-            results.append({
-                "run_id": run_id,
-                "n_estimators": config["n_estimators"],
-                "max_depth": config["max_depth"],
-                "rmse": rmse,
-                "mae": mae,
-                "r2": r2,
-            })
-
-            print(f"Run       : {run_name}")
-            print(f"Run ID    : {run_id}")
-            print(f"RMSE      : {rmse:.4f}")
-            print(f"MAE       : {mae:.4f}")
-            print(f"R²        : {r2:.4f}")
-            print("-" * 40)
-
-    best_result = min(results, key=lambda result: result["rmse"])
-
-    print("\n=== Model Terbaik Berdasarkan RMSE ===")
-    print(f"Run ID      : {best_result['run_id']}")
-    print(f"n_estimators: {best_result['n_estimators']}")
-    print(f"max_depth   : {best_result['max_depth']}")
-    print(f"RMSE        : {best_result['rmse']:.4f}")
-    print(f"MAE         : {best_result['mae']:.4f}")
-    print(f"R²          : {best_result['r2']:.4f}")
-
+        print("\nEksperimen terbaik berdasarkan RMSE:")
+        print(best)
 
 if __name__ == "__main__":
     main()
