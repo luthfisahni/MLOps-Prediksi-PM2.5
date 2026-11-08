@@ -1,0 +1,56 @@
+name: MLOps Automation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  mlops-pipeline:
+    runs-on: ubuntu-latest
+
+    env:
+      MLFLOW_TRACKING_URI: https://dagshub.com/luthfisahni/MLOps-Prediksi-PM2.5.mlflow
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
+      DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+      DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "dvc[http]"
+
+      - name: Configure DVC Authentication
+        run: |
+          dvc remote modify --local origin auth basic
+          dvc remote modify --local origin user "$DAGSHUB_USERNAME"
+          dvc remote modify --local origin password "$DAGSHUB_TOKEN"
+
+      - name: Pull Dataset from DVC
+        run: dvc pull
+
+      - name: Automated Testing
+        run: pytest -v
+
+      - name: Automated Training
+        run: python src/train.py
+
+      - name: Model Evaluation
+        run: python src/evaluate.py
+
+      - name: Register Model to Staging
+        run: python src/auto_register.py

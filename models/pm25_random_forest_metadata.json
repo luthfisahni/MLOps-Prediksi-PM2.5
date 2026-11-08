@@ -1,0 +1,37 @@
+{
+  "model_name": "PM25_RandomForest_Best",
+  "model_version": 1,
+  "model_type": "RandomForestRegressor",
+  "objective": "Memprediksi nilai PM2.5 pada observasi berikutnya berdasarkan tiga observasi sebelumnya.",
+  "data_source": "OpenAQ API v3",
+  "dataset_path": "data/processed/pm25_stt_satyabhakti_clean.csv",
+  "target": "next_period_pm25",
+  "target_unit": "µg/m³",
+  "features": [
+    "lag_1",
+    "lag_2",
+    "lag_3"
+  ],
+  "best_parameters": {
+    "n_estimators": 50,
+    "max_depth": 5,
+    "random_state": 42
+  },
+  "evaluation": {
+    "dataset_samples_after_feature_engineering": 1255,
+    "training_samples": 1004,
+    "testing_samples": 251,
+    "test_ratio": 0.2,
+    "rmse": 16.32635,
+    "mae": 10.72509,
+    "r2": 0.15805
+  },
+  "selection_criterion": "RMSE terendah di antara tiga konfigurasi yang diuji.",
+  "mlflow": {
+    "experiment_name": "Prediksi PM2.5 - Random Forest",
+    "run_id": "25c5a2a53a2d4418b3de91dfc9fd4072",
+    "registered_model_name": "PM25_RandomForest_Best",
+    "registered_model_version": 1,
+    "model_artifact": "random_forest_model"
+  }
+}
