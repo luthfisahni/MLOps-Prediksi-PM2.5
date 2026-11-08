@@ -97,10 +97,11 @@ def train_model(params, run_name, register=False):
         })
 
         mlflow.sklearn.log_model(
-            sk_model=model,
-            name=MODEL_ARTIFACT,
-            input_example=X_train.head(3)
-        )
+        sk_model=model,
+        name=MODEL_ARTIFACT,
+        input_example=X_train.head(3),
+        skops_trusted_types=["sklearn.tree._tree.Tree"]
+     )
 
         run_id = run.info.run_id
 
