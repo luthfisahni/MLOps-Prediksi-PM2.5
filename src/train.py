@@ -1,17 +1,22 @@
-
 from pathlib import Path
 import argparse
 
 import mlflow
 import mlflow.sklearn
 import pandas as pd
+import os
+import json
 
 from mlflow import MlflowClient
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DATABASE_PATH = ROOT_DIR / "mlflow.db"
+
+MLFLOW_TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    f"sqlite:///{ROOT_DIR / 'mlflow.db'}"
+)
 DATA_PATH = ROOT_DIR / "data/processed/pm25_stt_satyabhakti_clean.csv"
 
 EXPERIMENT_NAME = "Prediksi PM2.5 - Random Forest"
@@ -135,7 +140,7 @@ def main():
     )
     args = parser.parse_args()
 
-    mlflow.set_tracking_uri(f"sqlite:///{DATABASE_PATH}")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     if args.register_v2:
@@ -163,6 +168,14 @@ def main():
 
         print("\nEksperimen terbaik berdasarkan RMSE:")
         print(best)
+
+        # Simpan hasil eksperimen terbaik untuk tahap evaluasi
+        result_path = ROOT_DIR / "training_result.json"
+
+        with open(result_path, "w") as file:
+            json.dump(best, file, indent=4)
+
+        print("\nHasil eksperimen terbaik disimpan:", result_path)
 
 if __name__ == "__main__":
     main()
